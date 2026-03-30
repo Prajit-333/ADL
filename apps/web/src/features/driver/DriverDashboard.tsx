@@ -1,20 +1,40 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import { Button, Card, Badge, Alert } from '@repo/utils/ui';
-import { Car, MapPin, Power, Shield } from 'lucide-react';
+import { Car, MapPin, Route, Shield } from 'lucide-react';
+
+const formatDuration = (startedAt: Date | null) => {
+  if (!startedAt) return '--';
+  const elapsedMs = Date.now() - startedAt.getTime();
+  const elapsedMinutes = Math.floor(elapsedMs / 60000);
+  const hours = Math.floor(elapsedMinutes / 60);
+  const minutes = elapsedMinutes % 60;
+  return `${hours}h ${minutes}m`;
+};
 
 export default function DriverDashboard() {
-  const { user, login, logout } = useAuthStore();
-  const [isShiftActive, setIsShiftActive] = useState(false);
-  const { position, error } = useGeolocation(isShiftActive);
+  const { user } = useAuthStore();
+  const [isTripActive, setIsTripActive] = useState(false);
+  const [tripStartTime, setTripStartTime] = useState<Date | null>(null);
+  const [lastTripDuration, setLastTripDuration] = useState<string | null>(null);
+  const { position, error } = useGeolocation(isTripActive);
 
-  const handleToggleShift = () => {
-    if (!user) {
-      // Simulate login for demo if not logged in
-      login({ id: 'd1', name: 'John Doe', role: 'DRIVER' });
-    }
-    setIsShiftActive(!isShiftActive);
+  const speedKmh = useMemo(() => {
+    if (!position?.coords.speed || position.coords.speed < 0) return 0;
+    return position.coords.speed * 3.6;
+  }, [position]);
+
+  const handleStartTrip = () => {
+    if (!user || user.role !== 'DRIVER') return;
+    setTripStartTime(new Date());
+    setIsTripActive(true);
+  };
+
+  const handleEndTrip = () => {
+    setIsTripActive(false);
+    setLastTripDuration(formatDuration(tripStartTime));
+    setTripStartTime(null);
   };
 
   return (
@@ -22,10 +42,10 @@ export default function DriverDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Driver Console</h2>
-          <p className="text-gray-500">Manage your active trip and GPS sharing</p>
+          <p className="text-gray-500">Manage your active trip lifecycle and live GPS sharing</p>
         </div>
-        <Badge variant={isShiftActive ? 'success' : 'danger'}>
-          {isShiftActive ? 'ONLINE' : 'OFFLINE'}
+        <Badge variant={isTripActive ? 'success' : 'danger'}>
+          {isTripActive ? 'TRIP RUNNING' : 'TRIP IDLE'}
         </Badge>
       </div>
 
@@ -43,14 +63,34 @@ export default function DriverDashboard() {
               <span className="text-sm">Vehicle: KA-01-F-1234 (AC)</span>
             </div>
           </div>
-          <Button
-            className="w-full"
-            variant={isShiftActive ? 'danger' : 'primary'}
-            onClick={handleToggleShift}
-          >
-            <Power className="mr-2" size={18} />
-            {isShiftActive ? 'End Shift' : 'Start Shift'}
-          </Button>
+          <div className="space-y-2">
+            <Button className="w-full" onClick={handleStartTrip} disabled={isTripActive}>
+              <Route className="mr-2" size={18} />
+              Start Trip
+            </Button>
+            <Button
+              className="w-full"
+              variant="danger"
+              onClick={handleEndTrip}
+              disabled={!isTripActive}
+            >
+              End Trip
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded border p-2">
+              <p className="text-gray-500">Started At</p>
+              <p className="font-semibold">
+                {tripStartTime ? tripStartTime.toLocaleTimeString() : '--'}
+              </p>
+            </div>
+            <div className="rounded border p-2">
+              <p className="text-gray-500">Trip Duration</p>
+              <p className="font-semibold">
+                {isTripActive ? formatDuration(tripStartTime) : (lastTripDuration ?? '--')}
+              </p>
+            </div>
+          </div>
         </Card>
 
         <Card className="space-y-4">
@@ -69,13 +109,13 @@ export default function DriverDashboard() {
             </div>
             <div className="flex justify-between border-b pb-2">
               <span className="text-gray-500">Speed</span>
-              <span className="font-mono">{(position?.coords.speed || 0).toFixed(1)} km/h</span>
+              <span className="font-mono">{speedKmh.toFixed(1)} km/h</span>
             </div>
           </div>
           {error && <Alert variant="error" message={`GPS Error: ${error}`} />}
-          {!isShiftActive && (
+          {!isTripActive && (
             <div className="flex items-center justify-center p-8 text-gray-400">
-              <p>Start shift to enable GPS sharing</p>
+              <p>Start a trip to enable GPS sharing</p>
             </div>
           )}
         </Card>
@@ -93,7 +133,9 @@ export default function DriverDashboard() {
                 <p className="font-semibold">Stop Name {i}</p>
                 <p className="text-sm text-gray-500">Scheduled: 10:45 AM</p>
               </div>
-              <Button size="sm" variant="outline">Arrived</Button>
+              <Button size="sm" variant="outline" disabled={!isTripActive}>
+                Arrived
+              </Button>
             </div>
           ))}
         </div>

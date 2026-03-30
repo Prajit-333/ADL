@@ -1,4 +1,5 @@
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { useEffect, useMemo, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from 'react-leaflet';
 import { useBusStore } from '../../store/useBusStore';
 import { useRouteStore } from '../../store/useRouteStore';
 import L from 'leaflet';
@@ -27,24 +28,131 @@ const BusIcon = L.divIcon({
   iconAnchor: [16, 16],
 });
 
+const UserIcon = L.divIcon({
+  className: 'user-marker',
+  html: `<div class="w-5 h-5 rounded-full bg-emerald-500 border-2 border-white shadow-lg"></div>`,
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+});
+
+const DEFAULT_CENTER: [number, number] = [12.9716, 77.5946];
+const NEARBY_RADIUS_KM = 5;
+
+function RecenterMap({ center, zoom }: { center: [number, number]; zoom: number }) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.setView(center, zoom, { animate: true });
+  }, [map, center, zoom]);
+
+  return null;
+}
+
+const toRadians = (value: number) => (value * Math.PI) / 180;
+
+function getDistanceKm(
+  fromLat: number,
+  fromLon: number,
+  toLat: number,
+  toLon: number
+) {
+  const earthRadiusKm = 6371;
+  const latDiff = toRadians(toLat - fromLat);
+  const lonDiff = toRadians(toLon - fromLon);
+  const a =
+    Math.sin(latDiff / 2) * Math.sin(latDiff / 2) +
+    Math.cos(toRadians(fromLat)) *
+      Math.cos(toRadians(toLat)) *
+      Math.sin(lonDiff / 2) *
+      Math.sin(lonDiff / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
+
 export default function MapView() {
   const { locations } = useBusStore();
   const { routes, selectedRouteId } = useRouteStore();
+  const [userPosition, setUserPosition] = useState<[number, number] | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   const selectedRoute = routes.find(r => r.id === selectedRouteId);
+  const mapCenter = userPosition ?? DEFAULT_CENTER;
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported in this browser.');
+      return;
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setUserPosition([position.coords.latitude, position.coords.longitude]);
+        setLocationError(null);
+      },
+      (error) => {
+        setLocationError(error.message);
+      },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  const nearbyBusLocations = useMemo(() => {
+    const allLocations = Object.values(locations);
+    if (!userPosition) return allLocations;
+
+    return allLocations.filter((loc) => {
+      const distanceKm = getDistanceKm(
+        userPosition[0],
+        userPosition[1],
+        loc.latitude,
+        loc.longitude
+      );
+      return distanceKm <= NEARBY_RADIUS_KM;
+    });
+  }, [locations, userPosition]);
 
   return (
     <MapContainer
-      center={[12.9716, 77.5946]}
+      center={mapCenter}
       zoom={13}
       className="h-full w-full"
     >
+      <RecenterMap center={mapCenter} zoom={14} />
+
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       />
 
-      {/* Render Stops */}
+      {/* User live location */}
+      {userPosition && (
+        <>
+          <Marker position={userPosition} icon={UserIcon}>
+            <Popup>You are here</Popup>
+          </Marker>
+          <Circle center={userPosition} radius={NEARBY_RADIUS_KM * 1000} pathOptions={{ color: '#10b981', weight: 1, fillOpacity: 0.08 }} />
+        </>
+      )}
+
+      {/* Render all route polylines */}
+      {routes.map((route) => {
+        if (!route.stops || route.stops.length < 2) return null;
+        const sortedStops = [...route.stops].sort((a, b) => a.sequence - b.sequence);
+        const isSelected = route.id === selectedRouteId;
+        return (
+          <Polyline
+            key={route.id}
+            positions={sortedStops.map((s) => [s.latitude, s.longitude] as [number, number])}
+            color={isSelected ? '#1d4ed8' : '#60a5fa'}
+            weight={isSelected ? 5 : 3}
+            opacity={isSelected ? 0.9 : 0.45}
+          />
+        );
+      })}
+
+      {/* Render selected route stops */}
       {selectedRoute?.stops.map(stop => (
         <Marker
           key={stop.id}
@@ -55,8 +163,8 @@ export default function MapView() {
         </Marker>
       ))}
 
-      {/* Render Bus Locations */}
-      {Object.values(locations).map(loc => (
+      {/* Render nearby bus locations */}
+      {nearbyBusLocations.map(loc => (
         <Marker
           key={loc.vehicleId}
           position={[loc.latitude, loc.longitude]}
@@ -67,19 +175,20 @@ export default function MapView() {
               <h3 className="font-bold">Bus {loc.vehicleId}</h3>
               <p className="text-sm">Speed: {loc.speed} km/h</p>
               {loc.etaNextStop && <p className="text-sm font-semibold text-blue-600">ETA: {loc.etaNextStop} mins</p>}
+              {userPosition && (
+                <p className="text-sm text-gray-600">
+                  {getDistanceKm(userPosition[0], userPosition[1], loc.latitude, loc.longitude).toFixed(1)} km away
+                </p>
+              )}
             </div>
           </Popup>
         </Marker>
       ))}
 
-      {/* Render Route Polyline (Simplified) */}
-      {selectedRoute && (
-        <Polyline
-          positions={selectedRoute.stops.map(s => [s.latitude, s.longitude] as [number, number])}
-          color="blue"
-          weight={4}
-          opacity={0.6}
-        />
+      {locationError && (
+        <Marker position={mapCenter} icon={DefaultIcon}>
+          <Popup>{locationError}</Popup>
+        </Marker>
       )}
     </MapContainer>
   );
