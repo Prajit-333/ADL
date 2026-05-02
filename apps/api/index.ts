@@ -2,10 +2,9 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { Kafka } from "kafkajs";
-import { PrismaService, VehicleStatus } from "db/client";
-import crypto from "crypto";
+import { PrismaService } from "db/client";
 
-dotenv.config();
+dotenv.config({ override: true });
 const PORT = process.env.PORT || 3009;
 const app = express();
 app.use(express.json());
@@ -75,8 +74,8 @@ const parseTelemetry = (payload: unknown): TelemetryPayload | null => {
     vehicleId: body.vehicleId.trim(),
     routeId: typeof body.routeId === "string" ? body.routeId : undefined,
     tripId: typeof body.tripId === "string" ? body.tripId : undefined,
-    latitude: Number(body.latitude),
-    longitude: Number(body.longitude),
+    latitude: body.latitude as number,
+    longitude: body.longitude as number,
     speed: typeof body.speed === "number" ? body.speed : 0,
     recordedAt: typeof body.recordedAt === "string" ? body.recordedAt : undefined,
   };
@@ -86,272 +85,293 @@ app.get("/health", (_, res) => {
   res.json({ success: true, data: { status: "ok" } });
 });
 
-app.get("/routes", async (_, res) => {
-  const routes = await prisma.route.findMany({
-    include: { stops: { orderBy: { sequence: "asc" } } },
-    orderBy: { createdAt: "desc" },
+app.get("/buses/active", (_, res) => {
+  void (async () => {
+    const buses = await prisma.vehicle.findMany({
+      where: { status: "ACTIVE" },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ success: true, data: buses });
+  })().catch((error) => {
+    console.error("Failed to fetch active buses", error);
+    res.status(500).json({ success: false, message: "Failed to fetch active buses." });
   });
+});
 
-  res.json({
-    success: true,
-    data: routes.map((route) => ({
-      id: route.id,
-      code: route.code,
-      name: route.name,
-      city: route.city,
-      isActive: route.isActive,
-      stops: route.stops.map((stop) => ({
-        id: stop.id,
-        routeId: stop.routeId,
-        name: stop.name,
-        latitude: stop.latitude,
-        longitude: stop.longitude,
-        sequence: stop.sequence,
+app.get("/routes", (_, res) => {
+  void (async () => {
+    const routes = await prisma.route.findMany({
+      include: {
+        stops: {
+          orderBy: { sequence: "asc" },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ success: true, data: routes });
+  })().catch((error) => {
+    console.error("Failed to fetch routes", error);
+    res.status(500).json({ success: false, message: "Failed to fetch routes." });
+  });
+});
+
+app.get("/stops", (_, res) => {
+  void (async () => {
+    const stops = await prisma.routeStop.findMany({
+      orderBy: [{ routeId: "asc" }, { sequence: "asc" }],
+    });
+    res.json({ success: true, data: stops });
+  })().catch((error) => {
+    console.error("Failed to fetch stops", error);
+    res.status(500).json({ success: false, message: "Failed to fetch stops." });
+  });
+});
+
+app.get("/drivers", (_, res) => {
+  void (async () => {
+    const drivers = await prisma.driverProfile.findMany({
+      include: { user: true },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({
+      success: true,
+      data: drivers.map((driver) => ({
+        id: driver.id,
+        userId: driver.userId,
+        name: driver.user.name,
+        phone: driver.phone,
+        licenseNo: driver.licenseNo,
       })),
-    })),
+    });
+  })().catch((error) => {
+    console.error("Failed to fetch drivers", error);
+    res.status(500).json({ success: false, message: "Failed to fetch drivers." });
   });
 });
 
-app.get("/drivers", async (_, res) => {
-  const drivers = await prisma.driverProfile.findMany({
-    include: { user: true },
-    orderBy: { createdAt: "desc" },
-  });
-
-  res.json({
-    success: true,
-    data: drivers.map((driver) => ({
-      id: driver.id,
-      userId: driver.userId,
-      name: driver.user.name,
-      phone: driver.phone ?? undefined,
-      licenseNo: driver.licenseNo ?? undefined,
-    })),
-  });
-});
-
-app.get("/stops", async (_, res) => {
-  const stops = await prisma.routeStop.findMany({
-    orderBy: { sequence: "asc" },
-  });
-
-  res.json({
-    success: true,
-    data: stops.map((stop) => ({
-      id: stop.id,
-      name: stop.name,
-      latitude: stop.latitude,
-      longitude: stop.longitude,
-    })),
+app.get("/assignments", (_, res) => {
+  void (async () => {
+    const assignments = await prisma.vehicleAssignment.findMany({
+      include: {
+        vehicle: true,
+        route: true,
+        driver: {
+          include: { user: true },
+        },
+      },
+      orderBy: { startDate: "desc" },
+    });
+    res.json({
+      success: true,
+      data: assignments.map((assignment) => ({
+        id: assignment.id,
+        vehicleId: assignment.vehicleId,
+        routeId: assignment.routeId,
+        driverId: assignment.driverId,
+        startDate: assignment.startDate,
+        endDate: assignment.endDate,
+        vehicleRegistration: assignment.vehicle.registration,
+        routeCode: assignment.route.code,
+        driverName: assignment.driver.user.name,
+      })),
+    });
+  })().catch((error) => {
+    console.error("Failed to fetch assignments", error);
+    res.status(500).json({ success: false, message: "Failed to fetch assignments." });
   });
 });
 
-app.get("/buses/active", async (_, res) => {
-  const buses = await prisma.vehicle.findMany({
-    where: { status: VehicleStatus.ACTIVE },
-    orderBy: { createdAt: "desc" },
-  });
+app.post("/admin/routes", (req, res) => {
+  void (async () => {
+    const body = req.body as { code?: string; name?: string; city?: string };
+    const code = body.code?.trim().toUpperCase();
+    const name = body.name?.trim();
+    const city = body.city?.trim();
+    if (!code || !name || !city) {
+      res.status(400).json({ success: false, message: "code, name and city are required." });
+      return;
+    }
 
-  res.json({
-    success: true,
-    data: buses.map((bus) => ({
-      id: bus.id,
-      registration: bus.registration,
-      type: bus.type,
-      capacity: bus.capacity ?? undefined,
-      status: bus.status,
-    })),
-  });
-});
-
-app.get("/vehicles", async (_, res) => {
-  const vehicles = await prisma.vehicle.findMany({
-    orderBy: { createdAt: "desc" },
-  });
-
-  res.json({
-    success: true,
-    data: vehicles.map((vehicle) => ({
-      id: vehicle.id,
-      registration: vehicle.registration,
-      type: vehicle.type,
-      capacity: vehicle.capacity ?? undefined,
-      status: vehicle.status,
-    })),
+    const route = await prisma.route.create({
+      data: {
+        code,
+        name,
+        city,
+      },
+      include: { stops: true },
+    });
+    res.status(201).json({ success: true, data: route });
+  })().catch((error: any) => {
+    console.error("Failed to create route", error);
+    if (error?.code === "P2002") {
+      res.status(409).json({ success: false, message: "Route code already exists." });
+      return;
+    }
+    res.status(500).json({ success: false, message: "Failed to create route." });
   });
 });
 
-app.post("/admin/routes", async (req, res) => {
-  const { code, name, city } = req.body ?? {};
-  if (!code || !name || !city) {
-    res.status(400).json({ success: false, message: "code, name and city are required" });
-    return;
-  }
+app.post("/admin/stops", (req, res) => {
+  void (async () => {
+    const body = req.body as {
+      routeId?: string;
+      name?: string;
+      latitude?: number;
+      longitude?: number;
+      sequence?: number;
+    };
+    const routeId = body.routeId?.trim();
+    const name = body.name?.trim();
+    if (!routeId || !name || typeof body.latitude !== "number" || typeof body.longitude !== "number") {
+      res.status(400).json({
+        success: false,
+        message: "routeId, name, latitude and longitude are required.",
+      });
+      return;
+    }
 
-  const route = await prisma.route.create({
-    data: {
-      code: String(code).trim().toUpperCase(),
-      name: String(name).trim(),
-      city: String(city).trim(),
-    },
-    include: { stops: { orderBy: { sequence: "asc" } } },
-  });
-
-  res.status(201).json({
-    success: true,
-    data: {
-      id: route.id,
-      code: route.code,
-      name: route.name,
-      city: route.city,
-      isActive: route.isActive,
-      stops: route.stops,
-    },
-  });
-});
-
-app.post("/admin/stops", async (req, res) => {
-  const { routeId, name, latitude, longitude } = req.body ?? {};
-  const resolvedLatitude = Number(latitude);
-  const resolvedLongitude = Number(longitude);
-  if (
-    !routeId ||
-    !name ||
-    Number.isNaN(resolvedLatitude) ||
-    Number.isNaN(resolvedLongitude)
-  ) {
-    res
-      .status(400)
-      .json({ success: false, message: "routeId, name, latitude and longitude are required" });
-    return;
-  }
-
-  const existing = await prisma.routeStop.findMany({
-    where: { routeId: String(routeId) },
-    orderBy: { sequence: "desc" },
-    take: 1,
-  });
-  const nextSequence = (existing[0]?.sequence ?? 0) + 1;
-
-  const stop = await prisma.routeStop.create({
-    data: {
-      routeId: String(routeId),
-      name: String(name).trim(),
-      latitude: resolvedLatitude,
-      longitude: resolvedLongitude,
-      sequence: nextSequence,
-    },
-  });
-
-  res.status(201).json({
-    success: true,
-    data: {
-      id: stop.id,
-      name: stop.name,
-      latitude: stop.latitude,
-      longitude: stop.longitude,
-    },
+    const existingCount = await prisma.routeStop.count({ where: { routeId } });
+    const stop = await prisma.routeStop.create({
+      data: {
+        routeId,
+        name,
+        latitude: body.latitude,
+        longitude: body.longitude,
+        sequence: body.sequence ?? existingCount + 1,
+      },
+    });
+    res.status(201).json({ success: true, data: stop });
+  })().catch((error: any) => {
+    console.error("Failed to create stop", error);
+    if (error?.code === "P2003") {
+      res.status(404).json({ success: false, message: "Route not found for stop." });
+      return;
+    }
+    if (error?.code === "P2002") {
+      res.status(409).json({ success: false, message: "Sequence already exists for this route." });
+      return;
+    }
+    res.status(500).json({ success: false, message: "Failed to create stop." });
   });
 });
 
-app.post("/admin/drivers", async (req, res) => {
-  const { name, email, phone, licenseNo, password } = req.body ?? {};
-  if (!name || !email) {
-    res.status(400).json({ success: false, message: "name and email are required" });
-    return;
-  }
+app.post("/admin/vehicles", (req, res) => {
+  void (async () => {
+    const body = req.body as {
+      registration?: string;
+      type?: string;
+      capacity?: number;
+      status?: "ACTIVE" | "INACTIVE" | "MAINTENANCE";
+    };
+    const registration = body.registration?.trim().toUpperCase();
+    const type = body.type?.trim();
+    if (!registration || !type) {
+      res.status(400).json({ success: false, message: "registration and type are required." });
+      return;
+    }
 
-  const normalizedEmail = String(email).trim().toLowerCase();
-  const normalizedName = String(name).trim();
-
-  const user = await prisma.user.create({
-    data: {
-      name: normalizedName,
-      email: normalizedEmail,
-      password:
-        typeof password === "string" && password.length >= 6
-          ? password
-          : crypto.randomUUID().replace(/-/g, "").slice(0, 16),
-      role: "DRIVER",
-      isActive: true,
-    },
-  });
-
-  const driver = await prisma.driverProfile.create({
-    data: {
-      userId: user.id,
-      phone: typeof phone === "string" ? phone.trim() || null : null,
-      licenseNo: typeof licenseNo === "string" ? licenseNo.trim() || null : null,
-    },
-    include: { user: true },
-  });
-
-  res.status(201).json({
-    success: true,
-    data: {
-      id: driver.id,
-      userId: driver.userId,
-      name: driver.user.name,
-      phone: driver.phone ?? undefined,
-      licenseNo: driver.licenseNo ?? undefined,
-    },
+    const vehicle = await prisma.vehicle.create({
+      data: {
+        registration,
+        type,
+        capacity: typeof body.capacity === "number" ? body.capacity : undefined,
+        status: body.status ?? "ACTIVE",
+      },
+    });
+    res.status(201).json({ success: true, data: vehicle });
+  })().catch((error: any) => {
+    console.error("Failed to create vehicle", error);
+    if (error?.code === "P2002") {
+      res.status(409).json({ success: false, message: "Vehicle registration already exists." });
+      return;
+    }
+    res.status(500).json({ success: false, message: "Failed to create vehicle." });
   });
 });
 
-app.post("/admin/vehicles", async (req, res) => {
-  const { registration, type, capacity, status } = req.body ?? {};
-  if (!registration || !type) {
-    res.status(400).json({ success: false, message: "registration and type are required" });
-    return;
-  }
+app.post("/admin/drivers", (req, res) => {
+  void (async () => {
+    const body = req.body as {
+      name?: string;
+      email?: string;
+      password?: string;
+      phone?: string;
+      licenseNo?: string;
+    };
+    const name = body.name?.trim();
+    const email = body.email?.trim().toLowerCase();
+    const password = body.password?.trim();
+    if (!name || !email || !password) {
+      res.status(400).json({ success: false, message: "name, email and password are required." });
+      return;
+    }
 
-  const resolvedStatus = Object.values(VehicleStatus).includes(status)
-    ? status
-    : VehicleStatus.ACTIVE;
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password,
+        role: "DRIVER",
+        driverProfile: {
+          create: {
+            phone: body.phone?.trim() || null,
+            licenseNo: body.licenseNo?.trim() || null,
+          },
+        },
+      },
+      include: { driverProfile: true },
+    });
 
-  const vehicle = await prisma.vehicle.create({
-    data: {
-      registration: String(registration).trim().toUpperCase(),
-      type: String(type).trim(),
-      capacity: typeof capacity === "number" ? capacity : undefined,
-      status: resolvedStatus,
-    },
-  });
-
-  res.status(201).json({
-    success: true,
-    data: {
-      id: vehicle.id,
-      registration: vehicle.registration,
-      type: vehicle.type,
-      capacity: vehicle.capacity ?? undefined,
-      status: vehicle.status,
-    },
+    res.status(201).json({
+      success: true,
+      data: {
+        id: user.driverProfile?.id,
+        userId: user.id,
+        name: user.name,
+        phone: user.driverProfile?.phone,
+        licenseNo: user.driverProfile?.licenseNo,
+      },
+    });
+  })().catch((error: any) => {
+    console.error("Failed to create driver", error);
+    if (error?.code === "P2002") {
+      res.status(409).json({ success: false, message: "Driver email already exists." });
+      return;
+    }
+    res.status(500).json({ success: false, message: "Failed to create driver." });
   });
 });
 
-app.patch("/admin/vehicles/:id/status", async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body ?? {};
-  if (!Object.values(VehicleStatus).includes(status)) {
-    res.status(400).json({ success: false, message: "invalid vehicle status" });
-    return;
-  }
+app.post("/admin/assignments", (req, res) => {
+  void (async () => {
+    const body = req.body as {
+      vehicleId?: string;
+      routeId?: string;
+      driverId?: string;
+      startDate?: string;
+      endDate?: string;
+    };
+    const vehicleId = body.vehicleId?.trim();
+    const routeId = body.routeId?.trim();
+    const driverId = body.driverId?.trim();
+    const startDate = body.startDate ? new Date(body.startDate) : new Date();
+    const endDate = body.endDate ? new Date(body.endDate) : undefined;
+    if (!vehicleId || !routeId || !driverId) {
+      res.status(400).json({ success: false, message: "vehicleId, routeId and driverId are required." });
+      return;
+    }
 
-  const vehicle = await prisma.vehicle.update({
-    where: { id },
-    data: { status },
-  });
-
-  res.json({
-    success: true,
-    data: {
-      id: vehicle.id,
-      registration: vehicle.registration,
-      type: vehicle.type,
-      capacity: vehicle.capacity ?? undefined,
-      status: vehicle.status,
-    },
+    const assignment = await prisma.vehicleAssignment.create({
+      data: { vehicleId, routeId, driverId, startDate, endDate },
+    });
+    res.status(201).json({ success: true, data: assignment });
+  })().catch((error: any) => {
+    console.error("Failed to create assignment", error);
+    if (error?.code === "P2003") {
+      res.status(404).json({ success: false, message: "Vehicle, route or driver not found." });
+      return;
+    }
+    res.status(500).json({ success: false, message: "Failed to create assignment." });
   });
 });
 
@@ -373,17 +393,6 @@ app.post("/telemetry", async (req, res) => {
   activeBuses.set(event.vehicleId, event);
 
   try {
-    await prisma.locationHistory.create({
-      data: {
-        vehicleId: event.vehicleId,
-        tripId: event.tripId,
-        latitude: event.latitude,
-        longitude: event.longitude,
-        speed: event.speed,
-        recordedAt: new Date(event.recordedAt),
-      },
-    });
-
     await connectProducer();
     await producer.send({
       topic: KAFKA_TOPIC,
@@ -404,11 +413,6 @@ app.post("/telemetry", async (req, res) => {
   }
 });
 
-const start = async () => {
-  await prismaService.connect();
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-  });
-};
-
-void start();
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});

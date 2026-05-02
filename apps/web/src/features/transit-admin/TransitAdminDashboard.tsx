@@ -31,10 +31,24 @@ const statusBadgeVariant = (status: VehicleStatus) => {
 };
 
 export default function TransitAdminDashboard() {
-  const { routes, stops, selectedRouteId, setRoutes, setStops } = useRouteStore();
+  const { routes, stops, setRoutes, setStops } = useRouteStore();
   const { activeBuses, setActiveBuses } = useBusStore();
   const { logout } = useAuthStore();
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [assignmentRows, setAssignmentRows] = useState<
+    Array<{
+      id: string;
+      vehicleId: string;
+      routeId: string;
+      driverId: string;
+      vehicleRegistration: string;
+      routeCode: string;
+      driverName: string;
+      startDate: string;
+    }>
+  >([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [vehicleForm, setVehicleForm] = useState({
     registration: '',
@@ -55,43 +69,49 @@ export default function TransitAdminDashboard() {
     latitude: '',
     longitude: '',
   });
-  const [driverForm, setDriverForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    licenseNo: '',
+  const [assignmentForm, setAssignmentForm] = useState({
+    vehicleId: '',
+    routeId: '',
+    driverId: '',
   });
 
   useEffect(() => {
-    const load = async () => {
+    const bootstrap = async () => {
       try {
-        const [routesRes, stopsRes, busesRes, driversRes] = await Promise.all([
+        const [routesRes, stopsRes, busesRes, driversRes, assignmentsRes] = await Promise.all([
           api.getRoutes(),
           api.getStops(),
-          api.getVehicles(),
+          api.getActiveBuses(),
           api.getDrivers(),
+          api.getAssignments(),
         ]);
+
         if (routesRes.success) setRoutes(routesRes.data);
         if (stopsRes.success) setStops(stopsRes.data);
-        if (busesRes.success) setActiveBuses(busesRes.data);
+        if (busesRes.success && busesRes.data.length > 0) setActiveBuses(busesRes.data);
         if (driversRes.success) setDrivers(driversRes.data);
-      } catch {
-        if (activeBuses.length === 0) {
-          setActiveBuses(defaultVehicles);
+        if (assignmentsRes.success) {
+          setAssignmentRows(
+            assignmentsRes.data.map((item) => ({
+              id: item.id,
+              vehicleId: item.vehicleId,
+              routeId: item.routeId,
+              driverId: item.driverId,
+              vehicleRegistration: item.vehicleRegistration,
+              routeCode: item.routeCode,
+              driverName: item.driverName,
+              startDate: item.startDate,
+            })),
+          );
         }
+      } catch (error) {
+        console.error(error);
+        setErrorMessage('Failed to load transit admin data from API.');
       }
     };
 
-    void load();
-  }, [activeBuses.length, setActiveBuses, setRoutes, setStops]);
-
-  useEffect(() => {
-    if (stopForm.routeId) return;
-    const fallbackRouteId = selectedRouteId || routes[0]?.id || '';
-    if (fallbackRouteId) {
-      setStopForm((prev) => ({ ...prev, routeId: fallbackRouteId }));
-    }
-  }, [routes, selectedRouteId, stopForm.routeId]);
+    void bootstrap();
+  }, [setActiveBuses, setRoutes, setStops]);
 
   const vehicles = useMemo(
     () => (activeBuses.length > 0 ? activeBuses : defaultVehicles),
@@ -100,6 +120,7 @@ export default function TransitAdminDashboard() {
 
   const handleAddVehicle = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setErrorMessage(null);
     const registration = vehicleForm.registration.trim().toUpperCase();
     const type = vehicleForm.type.trim();
     const capacity = Number(vehicleForm.capacity);
@@ -108,27 +129,35 @@ export default function TransitAdminDashboard() {
       return;
     }
 
-    const res = await api.createVehicle({
-      registration,
-      type,
-      capacity,
-      status: vehicleForm.status,
-    });
-    if (res.success) {
-      setActiveBuses([res.data, ...vehicles]);
+    setIsSubmitting(true);
+    try {
+      const res = await api.createVehicle({
+        registration,
+        type,
+        capacity,
+        status: vehicleForm.status,
+      });
+      if (res.success) {
+        setActiveBuses([res.data, ...vehicles]);
+        setVehicleForm({ registration: '', type: '', capacity: '40', status: VehicleStatus.ACTIVE });
+      }
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.message ?? 'Failed to create vehicle');
+    } finally {
+      setIsSubmitting(false);
     }
-    setVehicleForm({ registration: '', type: '', capacity: '40', status: VehicleStatus.ACTIVE });
   };
 
-  const handleVehicleStatusUpdate = async (vehicleId: string, status: VehicleStatus) => {
-    const res = await api.updateVehicleStatus(vehicleId, status);
-    if (!res.success) return;
-    const updated = vehicles.map((vehicle) => (vehicle.id === vehicleId ? res.data : vehicle));
+  const handleVehicleStatusUpdate = (vehicleId: string, status: VehicleStatus) => {
+    const updated = vehicles.map((vehicle) =>
+      vehicle.id === vehicleId ? { ...vehicle, status } : vehicle,
+    );
     setActiveBuses(updated);
   };
 
   const handleAddRoute = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setErrorMessage(null);
     const code = routeForm.code.trim().toUpperCase();
     const name = routeForm.name.trim();
     const city = routeForm.city.trim();
@@ -137,64 +166,82 @@ export default function TransitAdminDashboard() {
       return;
     }
 
-    const res = await api.createRoute({ code, name, city });
-    if (res.success) {
-      setRoutes([res.data, ...routes]);
+    setIsSubmitting(true);
+    try {
+      const res = await api.createRoute({ code, name, city });
+      if (res.success) {
+        setRoutes([res.data, ...routes]);
+        setRouteForm({ code: '', name: '', city: '' });
+      }
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.message ?? 'Failed to create route');
+    } finally {
+      setIsSubmitting(false);
     }
-    setRouteForm({ code: '', name: '', city: '' });
   };
 
   const handleAddStop = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setErrorMessage(null);
+    const routeId = stopForm.routeId.trim();
     const name = stopForm.name.trim();
     const latitude = Number(stopForm.latitude);
     const longitude = Number(stopForm.longitude);
-    const routeId = stopForm.routeId || selectedRouteId || routes[0]?.id;
 
     if (!routeId || !name || Number.isNaN(latitude) || Number.isNaN(longitude)) {
       return;
     }
 
-    const res = await api.createStop({ routeId, name, latitude, longitude });
-    if (res.success) {
-      setStops([res.data, ...stops]);
-      setRoutes(
-        routes.map((route) =>
-          route.id === routeId
-            ? {
-                ...route,
-                stops: [
-                  ...route.stops,
-                  {
-                    ...res.data,
-                    routeId,
-                    sequence: route.stops.length + 1,
-                  },
-                ],
-              }
-            : route,
-        ),
-      );
+    setIsSubmitting(true);
+    try {
+      const res = await api.createStop({ routeId, name, latitude, longitude });
+      if (res.success) {
+        setStops([res.data, ...stops]);
+        setStopForm({ routeId: '', name: '', latitude: '', longitude: '' });
+      }
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.message ?? 'Failed to create stop');
+    } finally {
+      setIsSubmitting(false);
     }
-    setStopForm((prev) => ({ ...prev, name: '', latitude: '', longitude: '' }));
   };
 
-  const handleAddDriver = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleAddAssignment = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const name = driverForm.name.trim();
-    const email = driverForm.email.trim().toLowerCase();
-    if (!name || !email) return;
-
-    const res = await api.createDriver({
-      name,
-      email,
-      phone: driverForm.phone.trim() || undefined,
-      licenseNo: driverForm.licenseNo.trim() || undefined,
-    });
-
-    if (res.success) {
-      setDrivers((prev) => [res.data, ...prev]);
-      setDriverForm({ name: '', email: '', phone: '', licenseNo: '' });
+    setErrorMessage(null);
+    if (!assignmentForm.vehicleId || !assignmentForm.routeId || !assignmentForm.driverId) {
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const res = await api.createAssignment({
+        vehicleId: assignmentForm.vehicleId,
+        routeId: assignmentForm.routeId,
+        driverId: assignmentForm.driverId,
+      });
+      if (res.success) {
+        const vehicle = vehicles.find((item) => item.id === assignmentForm.vehicleId);
+        const route = routes.find((item) => item.id === assignmentForm.routeId);
+        const driver = drivers.find((item) => item.id === assignmentForm.driverId);
+        setAssignmentRows([
+          {
+            id: res.data.id,
+            vehicleId: res.data.vehicleId,
+            routeId: res.data.routeId,
+            driverId: res.data.driverId,
+            startDate: res.data.startDate,
+            vehicleRegistration: vehicle?.registration ?? res.data.vehicleId,
+            routeCode: route?.code ?? res.data.routeId,
+            driverName: driver?.name ?? res.data.driverId,
+          },
+          ...assignmentRows,
+        ]);
+        setAssignmentForm({ vehicleId: '', routeId: '', driverId: '' });
+      }
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.message ?? 'Failed to create assignment');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -206,8 +253,13 @@ export default function TransitAdminDashboard() {
           Logout
         </Button>
       </div>
+      {errorMessage && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          {errorMessage}
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="flex items-center gap-3">
           <RouteIcon className="text-blue-600" />
           <div>
@@ -227,13 +279,6 @@ export default function TransitAdminDashboard() {
           <div>
             <p className="text-sm text-gray-500">Vehicles</p>
             <p className="text-xl font-bold">{vehicles.length}</p>
-          </div>
-        </Card>
-        <Card className="flex items-center gap-3">
-          <BusIcon className="text-purple-600" />
-          <div>
-            <p className="text-sm text-gray-500">Drivers</p>
-            <p className="text-xl font-bold">{drivers.length}</p>
           </div>
         </Card>
       </div>
@@ -352,55 +397,6 @@ export default function TransitAdminDashboard() {
       </div>
 
       <Card className="space-y-4">
-        <h3 className="font-bold">Manage Drivers</h3>
-        <form className="grid grid-cols-1 md:grid-cols-4 gap-3" onSubmit={handleAddDriver}>
-          <input
-            className="border border-gray-300 rounded-md px-3 py-2"
-            placeholder="Driver Name"
-            value={driverForm.name}
-            onChange={(event) => setDriverForm((prev) => ({ ...prev, name: event.target.value }))}
-          />
-          <input
-            className="border border-gray-300 rounded-md px-3 py-2"
-            placeholder="Driver Email"
-            value={driverForm.email}
-            onChange={(event) => setDriverForm((prev) => ({ ...prev, email: event.target.value }))}
-          />
-          <input
-            className="border border-gray-300 rounded-md px-3 py-2"
-            placeholder="Phone"
-            value={driverForm.phone}
-            onChange={(event) => setDriverForm((prev) => ({ ...prev, phone: event.target.value }))}
-          />
-          <input
-            className="border border-gray-300 rounded-md px-3 py-2"
-            placeholder="License Number"
-            value={driverForm.licenseNo}
-            onChange={(event) => setDriverForm((prev) => ({ ...prev, licenseNo: event.target.value }))}
-          />
-          <Button type="submit">Add Driver</Button>
-        </form>
-        <Table headers={['Name', 'Email/ID', 'Phone', 'License']}>
-          {drivers.length > 0 ? (
-            drivers.map((driver) => (
-              <tr key={driver.id}>
-                <td className="px-6 py-4 font-semibold">{driver.name}</td>
-                <td className="px-6 py-4 text-sm text-gray-600">{driver.userId}</td>
-                <td className="px-6 py-4">{driver.phone ?? '--'}</td>
-                <td className="px-6 py-4">{driver.licenseNo ?? '--'}</td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                No drivers configured.
-              </td>
-            </tr>
-          )}
-        </Table>
-      </Card>
-
-      <Card className="space-y-4">
         <h3 className="font-bold">Manage Vehicles</h3>
         <form className="grid grid-cols-1 md:grid-cols-5 gap-3" onSubmit={handleAddVehicle}>
           <input
@@ -437,7 +433,7 @@ export default function TransitAdminDashboard() {
             <option value={VehicleStatus.INACTIVE}>INACTIVE</option>
             <option value={VehicleStatus.MAINTENANCE}>MAINTENANCE</option>
           </select>
-          <Button type="submit">Add Vehicle</Button>
+          <Button type="submit" disabled={isSubmitting}>Add Vehicle</Button>
         </form>
 
         <Table headers={['Registration', 'Type', 'Capacity', 'Status', 'Actions']}>
@@ -472,6 +468,74 @@ export default function TransitAdminDashboard() {
               </td>
             </tr>
           ))}
+        </Table>
+      </Card>
+
+      <Card className="space-y-4">
+        <h3 className="font-bold">Assign Driver, Route and Vehicle</h3>
+        <form className="grid grid-cols-1 md:grid-cols-4 gap-3" onSubmit={handleAddAssignment}>
+          <select
+            className="border border-gray-300 rounded-md px-3 py-2 bg-white"
+            value={assignmentForm.vehicleId}
+            onChange={(event) =>
+              setAssignmentForm((prev) => ({ ...prev, vehicleId: event.target.value }))
+            }
+          >
+            <option value="">Select Vehicle</option>
+            {vehicles.map((vehicle) => (
+              <option key={vehicle.id} value={vehicle.id}>
+                {vehicle.registration}
+              </option>
+            ))}
+          </select>
+          <select
+            className="border border-gray-300 rounded-md px-3 py-2 bg-white"
+            value={assignmentForm.routeId}
+            onChange={(event) =>
+              setAssignmentForm((prev) => ({ ...prev, routeId: event.target.value }))
+            }
+          >
+            <option value="">Select Route</option>
+            {routes.map((route) => (
+              <option key={route.id} value={route.id}>
+                {route.code} - {route.name}
+              </option>
+            ))}
+          </select>
+          <select
+            className="border border-gray-300 rounded-md px-3 py-2 bg-white"
+            value={assignmentForm.driverId}
+            onChange={(event) =>
+              setAssignmentForm((prev) => ({ ...prev, driverId: event.target.value }))
+            }
+          >
+            <option value="">Select Driver</option>
+            {drivers.map((driver) => (
+              <option key={driver.id} value={driver.id}>
+                {driver.name}
+              </option>
+            ))}
+          </select>
+          <Button type="submit" disabled={isSubmitting}>Create Assignment</Button>
+        </form>
+
+        <Table headers={['Vehicle', 'Route', 'Driver', 'Start Date']}>
+          {assignmentRows.length > 0 ? (
+            assignmentRows.map((item) => (
+              <tr key={item.id}>
+                <td className="px-6 py-4">{item.vehicleRegistration}</td>
+                <td className="px-6 py-4">{item.routeCode}</td>
+                <td className="px-6 py-4">{item.driverName}</td>
+                <td className="px-6 py-4">{new Date(item.startDate).toLocaleString()}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                No assignments created yet.
+              </td>
+            </tr>
+          )}
         </Table>
       </Card>
     </div>
