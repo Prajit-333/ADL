@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouteStore } from '../../store/useRouteStore';
 import { useBusStore } from '../../store/useBusStore';
 import { useAuthStore } from '../../store/useAuthStore';
+import { api } from '../../services/api';
 import { Badge, Button, Card, StatusDot, Table } from '@repo/utils/ui';
-import { VehicleStatus, type Bus, type Route, type Stop } from '@repo/utils/types';
+import { VehicleStatus, type Bus, type Driver } from '@repo/utils/types';
 import { Bus as BusIcon, MapPinned, Route as RouteIcon } from 'lucide-react';
 
 const defaultVehicles: Bus[] = [
@@ -30,9 +31,10 @@ const statusBadgeVariant = (status: VehicleStatus) => {
 };
 
 export default function TransitAdminDashboard() {
-  const { routes, stops, setRoutes, setStops } = useRouteStore();
+  const { routes, stops, selectedRouteId, setRoutes, setStops } = useRouteStore();
   const { activeBuses, setActiveBuses } = useBusStore();
   const { logout } = useAuthStore();
+  const [drivers, setDrivers] = useState<Driver[]>([]);
 
   const [vehicleForm, setVehicleForm] = useState({
     registration: '',
@@ -48,23 +50,55 @@ export default function TransitAdminDashboard() {
   });
 
   const [stopForm, setStopForm] = useState({
+    routeId: '',
     name: '',
     latitude: '',
     longitude: '',
   });
+  const [driverForm, setDriverForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    licenseNo: '',
+  });
 
   useEffect(() => {
-    if (activeBuses.length === 0) {
-      setActiveBuses(defaultVehicles);
+    const load = async () => {
+      try {
+        const [routesRes, stopsRes, busesRes, driversRes] = await Promise.all([
+          api.getRoutes(),
+          api.getStops(),
+          api.getVehicles(),
+          api.getDrivers(),
+        ]);
+        if (routesRes.success) setRoutes(routesRes.data);
+        if (stopsRes.success) setStops(stopsRes.data);
+        if (busesRes.success) setActiveBuses(busesRes.data);
+        if (driversRes.success) setDrivers(driversRes.data);
+      } catch {
+        if (activeBuses.length === 0) {
+          setActiveBuses(defaultVehicles);
+        }
+      }
+    };
+
+    void load();
+  }, [activeBuses.length, setActiveBuses, setRoutes, setStops]);
+
+  useEffect(() => {
+    if (stopForm.routeId) return;
+    const fallbackRouteId = selectedRouteId || routes[0]?.id || '';
+    if (fallbackRouteId) {
+      setStopForm((prev) => ({ ...prev, routeId: fallbackRouteId }));
     }
-  }, [activeBuses.length, setActiveBuses]);
+  }, [routes, selectedRouteId, stopForm.routeId]);
 
   const vehicles = useMemo(
     () => (activeBuses.length > 0 ? activeBuses : defaultVehicles),
     [activeBuses],
   );
 
-  const handleAddVehicle = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleAddVehicle = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const registration = vehicleForm.registration.trim().toUpperCase();
     const type = vehicleForm.type.trim();
@@ -74,26 +108,26 @@ export default function TransitAdminDashboard() {
       return;
     }
 
-    const newVehicle: Bus = {
-      id: `vehicle-${Date.now()}`,
+    const res = await api.createVehicle({
       registration,
       type,
       capacity,
       status: vehicleForm.status,
-    };
-
-    setActiveBuses([newVehicle, ...vehicles]);
+    });
+    if (res.success) {
+      setActiveBuses([res.data, ...vehicles]);
+    }
     setVehicleForm({ registration: '', type: '', capacity: '40', status: VehicleStatus.ACTIVE });
   };
 
-  const handleVehicleStatusUpdate = (vehicleId: string, status: VehicleStatus) => {
-    const updated = vehicles.map((vehicle) =>
-      vehicle.id === vehicleId ? { ...vehicle, status } : vehicle,
-    );
+  const handleVehicleStatusUpdate = async (vehicleId: string, status: VehicleStatus) => {
+    const res = await api.updateVehicleStatus(vehicleId, status);
+    if (!res.success) return;
+    const updated = vehicles.map((vehicle) => (vehicle.id === vehicleId ? res.data : vehicle));
     setActiveBuses(updated);
   };
 
-  const handleAddRoute = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleAddRoute = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const code = routeForm.code.trim().toUpperCase();
     const name = routeForm.name.trim();
@@ -103,38 +137,65 @@ export default function TransitAdminDashboard() {
       return;
     }
 
-    const newRoute: Route = {
-      id: `route-${Date.now()}`,
-      code,
-      name,
-      city,
-      isActive: true,
-      stops: [],
-    };
-
-    setRoutes([newRoute, ...routes]);
+    const res = await api.createRoute({ code, name, city });
+    if (res.success) {
+      setRoutes([res.data, ...routes]);
+    }
     setRouteForm({ code: '', name: '', city: '' });
   };
 
-  const handleAddStop = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleAddStop = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const name = stopForm.name.trim();
     const latitude = Number(stopForm.latitude);
     const longitude = Number(stopForm.longitude);
+    const routeId = stopForm.routeId || selectedRouteId || routes[0]?.id;
 
-    if (!name || Number.isNaN(latitude) || Number.isNaN(longitude)) {
+    if (!routeId || !name || Number.isNaN(latitude) || Number.isNaN(longitude)) {
       return;
     }
 
-    const newStop: Stop = {
-      id: `stop-${Date.now()}`,
-      name,
-      latitude,
-      longitude,
-    };
+    const res = await api.createStop({ routeId, name, latitude, longitude });
+    if (res.success) {
+      setStops([res.data, ...stops]);
+      setRoutes(
+        routes.map((route) =>
+          route.id === routeId
+            ? {
+                ...route,
+                stops: [
+                  ...route.stops,
+                  {
+                    ...res.data,
+                    routeId,
+                    sequence: route.stops.length + 1,
+                  },
+                ],
+              }
+            : route,
+        ),
+      );
+    }
+    setStopForm((prev) => ({ ...prev, name: '', latitude: '', longitude: '' }));
+  };
 
-    setStops([newStop, ...stops]);
-    setStopForm({ name: '', latitude: '', longitude: '' });
+  const handleAddDriver = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = driverForm.name.trim();
+    const email = driverForm.email.trim().toLowerCase();
+    if (!name || !email) return;
+
+    const res = await api.createDriver({
+      name,
+      email,
+      phone: driverForm.phone.trim() || undefined,
+      licenseNo: driverForm.licenseNo.trim() || undefined,
+    });
+
+    if (res.success) {
+      setDrivers((prev) => [res.data, ...prev]);
+      setDriverForm({ name: '', email: '', phone: '', licenseNo: '' });
+    }
   };
 
   return (
@@ -146,7 +207,7 @@ export default function TransitAdminDashboard() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="flex items-center gap-3">
           <RouteIcon className="text-blue-600" />
           <div>
@@ -166,6 +227,13 @@ export default function TransitAdminDashboard() {
           <div>
             <p className="text-sm text-gray-500">Vehicles</p>
             <p className="text-xl font-bold">{vehicles.length}</p>
+          </div>
+        </Card>
+        <Card className="flex items-center gap-3">
+          <BusIcon className="text-purple-600" />
+          <div>
+            <p className="text-sm text-gray-500">Drivers</p>
+            <p className="text-xl font-bold">{drivers.length}</p>
           </div>
         </Card>
       </div>
@@ -222,6 +290,18 @@ export default function TransitAdminDashboard() {
         <Card className="space-y-4">
           <h3 className="font-bold">Manage Bus Stops</h3>
           <form className="grid grid-cols-1 gap-3" onSubmit={handleAddStop}>
+            <select
+              className="border border-gray-300 rounded-md px-3 py-2 bg-white"
+              value={stopForm.routeId}
+              onChange={(event) => setStopForm((prev) => ({ ...prev, routeId: event.target.value }))}
+            >
+              <option value="">Select Route</option>
+              {routes.map((route) => (
+                <option key={route.id} value={route.id}>
+                  {route.code} - {route.name}
+                </option>
+              ))}
+            </select>
             <input
               className="border border-gray-300 rounded-md px-3 py-2"
               placeholder="Stop Name"
@@ -270,6 +350,55 @@ export default function TransitAdminDashboard() {
           </Table>
         </Card>
       </div>
+
+      <Card className="space-y-4">
+        <h3 className="font-bold">Manage Drivers</h3>
+        <form className="grid grid-cols-1 md:grid-cols-4 gap-3" onSubmit={handleAddDriver}>
+          <input
+            className="border border-gray-300 rounded-md px-3 py-2"
+            placeholder="Driver Name"
+            value={driverForm.name}
+            onChange={(event) => setDriverForm((prev) => ({ ...prev, name: event.target.value }))}
+          />
+          <input
+            className="border border-gray-300 rounded-md px-3 py-2"
+            placeholder="Driver Email"
+            value={driverForm.email}
+            onChange={(event) => setDriverForm((prev) => ({ ...prev, email: event.target.value }))}
+          />
+          <input
+            className="border border-gray-300 rounded-md px-3 py-2"
+            placeholder="Phone"
+            value={driverForm.phone}
+            onChange={(event) => setDriverForm((prev) => ({ ...prev, phone: event.target.value }))}
+          />
+          <input
+            className="border border-gray-300 rounded-md px-3 py-2"
+            placeholder="License Number"
+            value={driverForm.licenseNo}
+            onChange={(event) => setDriverForm((prev) => ({ ...prev, licenseNo: event.target.value }))}
+          />
+          <Button type="submit">Add Driver</Button>
+        </form>
+        <Table headers={['Name', 'Email/ID', 'Phone', 'License']}>
+          {drivers.length > 0 ? (
+            drivers.map((driver) => (
+              <tr key={driver.id}>
+                <td className="px-6 py-4 font-semibold">{driver.name}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{driver.userId}</td>
+                <td className="px-6 py-4">{driver.phone ?? '--'}</td>
+                <td className="px-6 py-4">{driver.licenseNo ?? '--'}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                No drivers configured.
+              </td>
+            </tr>
+          )}
+        </Table>
+      </Card>
 
       <Card className="space-y-4">
         <h3 className="font-bold">Manage Vehicles</h3>

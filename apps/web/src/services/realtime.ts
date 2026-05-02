@@ -1,43 +1,74 @@
-import { io, Socket } from 'socket.io-client';
 import { useBusStore } from '../store/useBusStore';
 import type { BusLocationUpdate } from '@repo/utils/types';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:4000';
 
 class RealtimeService {
-  private socket: Socket | null = null;
+  private socket: WebSocket | null = null;
 
   connect() {
-    if (this.socket?.connected) return;
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) return;
 
-    this.socket = io(WS_URL, {
-      transports: ['websocket'],
-    });
+    this.socket = new WebSocket(WS_URL);
 
-    this.socket.on('connect', () => {
+    this.socket.onopen = () => {
       console.log('Connected to realtime gateway');
-    });
+    };
 
-    this.socket.on('vehicle.location.updated', (update: BusLocationUpdate) => {
-      useBusStore.getState().updateLocation(update);
-    });
+    this.socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data) as {
+          type: string;
+          payload: BusLocationUpdate | BusLocationUpdate[];
+        };
 
-    this.socket.on('disconnect', () => {
+        if (message.type === 'vehicle.location.updated') {
+          useBusStore.getState().updateLocation(message.payload as BusLocationUpdate);
+          return;
+        }
+
+        if (message.type === 'active_buses.snapshot') {
+          const snapshot = message.payload as BusLocationUpdate[];
+          const locations = snapshot.reduce<Record<string, BusLocationUpdate>>((acc, update) => {
+            acc[update.vehicleId] = update;
+            return acc;
+          }, {});
+          useBusStore.getState().setLocations(locations);
+        }
+      } catch (error) {
+        console.warn('Invalid realtime message', error);
+      }
+    };
+
+    this.socket.onclose = () => {
       console.log('Disconnected from realtime gateway');
-    });
+    };
   }
 
   disconnect() {
-    this.socket?.disconnect();
+    this.socket?.close();
     this.socket = null;
   }
 
   subscribeToRoute(routeId: string) {
-    this.socket?.emit('subscribe', { type: 'route', id: routeId });
+    this.send({ type: 'subscribe.route', id: routeId });
   }
 
   unsubscribeFromRoute(routeId: string) {
-    this.socket?.emit('unsubscribe', { type: 'route', id: routeId });
+    this.send({ type: 'unsubscribe.route', id: routeId });
+  }
+
+  subscribeToBus(busId: string) {
+    this.send({ type: 'subscribe.bus', id: busId });
+  }
+
+  unsubscribeFromBus(busId: string) {
+    this.send({ type: 'unsubscribe.bus', id: busId });
+  }
+
+  private send(payload: { type: string; id: string }) {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    this.socket.send(JSON.stringify(payload));
   }
 }
 

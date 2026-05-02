@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useGeolocation } from '../../hooks/useGeolocation';
+import { api } from '../../services/api';
 import { Button, Card, Badge, Alert } from '@repo/utils/ui';
 import { Car, MapPin, Route, Shield } from 'lucide-react';
 
@@ -24,6 +25,22 @@ export default function DriverDashboard() {
     if (!position?.coords.speed || position.coords.speed < 0) return 0;
     return position.coords.speed * 3.6;
   }, [position]);
+
+  useEffect(() => {
+    if (!isTripActive || !position || !user || user.role !== 'DRIVER') return;
+
+    const payload = {
+      vehicleId: user.id,
+      routeId: 'route-101',
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+      speed: speedKmh,
+    };
+
+    void api.updateLocation(payload).catch((error) => {
+      console.error('Failed to send telemetry', error);
+    });
+  }, [isTripActive, position, speedKmh, user]);
 
   const handleStartTrip = () => {
     if (!user || user.role !== 'DRIVER') return;

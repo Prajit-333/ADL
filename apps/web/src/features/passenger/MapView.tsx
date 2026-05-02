@@ -70,7 +70,7 @@ function getDistanceKm(
 }
 
 export default function MapView() {
-  const { locations } = useBusStore();
+  const { locations, selectedBusId } = useBusStore();
   const { routes, selectedRouteId } = useRouteStore();
   const [userPosition, setUserPosition] = useState<[number, number] | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -99,7 +99,10 @@ export default function MapView() {
   }, []);
 
   const nearbyBusLocations = useMemo(() => {
-    const allLocations = Object.values(locations);
+    let allLocations = Object.values(locations);
+    if (selectedBusId) {
+      allLocations = allLocations.filter((loc) => loc.vehicleId === selectedBusId);
+    }
     if (!userPosition) return allLocations;
 
     return allLocations.filter((loc) => {
@@ -111,7 +114,7 @@ export default function MapView() {
       );
       return distanceKm <= NEARBY_RADIUS_KM;
     });
-  }, [locations, userPosition]);
+  }, [locations, selectedBusId, userPosition]);
 
   return (
     <MapContainer

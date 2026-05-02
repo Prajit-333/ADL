@@ -4,11 +4,12 @@ import { useRouteStore } from '../../store/useRouteStore';
 import { useBusStore } from '../../store/useBusStore';
 import { api } from '../../services/api';
 import { mockData } from '../../services/mock';
+import { realtime } from '../../services/realtime';
 import { SearchInput, Card, Badge, Spinner } from '@repo/utils/ui';
 
 export default function PassengerDashboard() {
   const { routes, setRoutes, selectedRouteId, setSelectedRoute, isLoading, setLoading } = useRouteStore();
-  const { locations } = useBusStore();
+  const { locations, selectedBusId, setSelectedBus } = useBusStore();
 
   useEffect(() => {
     const fetchRoutes = async () => {
@@ -27,6 +28,18 @@ export default function PassengerDashboard() {
     fetchRoutes();
   }, []);
 
+  useEffect(() => {
+    if (!selectedRouteId) return;
+    realtime.subscribeToRoute(selectedRouteId);
+    return () => realtime.unsubscribeFromRoute(selectedRouteId);
+  }, [selectedRouteId]);
+
+  useEffect(() => {
+    if (!selectedBusId) return;
+    realtime.subscribeToBus(selectedBusId);
+    return () => realtime.unsubscribeFromBus(selectedBusId);
+  }, [selectedBusId]);
+
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* Sidebar */}
@@ -43,19 +56,19 @@ export default function PassengerDashboard() {
             <div className="flex justify-center p-8"><Spinner /></div>
           ) : (
             routes.map(route => (
-              <Card
-                key={route.id}
-                className={`cursor-pointer transition-all hover:border-blue-400 ${selectedRouteId === route.id ? 'border-blue-600 ring-1 ring-blue-600' : ''}`}
-                onClick={() => setSelectedRoute(route.id)}
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-sm font-bold text-blue-600">{route.code}</span>
-                    <h3 className="font-semibold text-gray-900">{route.name}</h3>
+              <button key={route.id} onClick={() => setSelectedRoute(route.id)} className="text-left">
+                <Card
+                  className={`cursor-pointer transition-all hover:border-blue-400 ${selectedRouteId === route.id ? 'border-blue-600 ring-1 ring-blue-600' : ''}`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-sm font-bold text-blue-600">{route.code}</span>
+                      <h3 className="font-semibold text-gray-900">{route.name}</h3>
+                    </div>
+                    <Badge variant="success">Active</Badge>
                   </div>
-                  <Badge variant="success">Active</Badge>
-                </div>
-              </Card>
+                </Card>
+              </button>
             ))
           )}
         </div>
@@ -65,8 +78,17 @@ export default function PassengerDashboard() {
             <h4 className="font-bold text-blue-800 mb-2">Nearby Buses</h4>
             <div className="space-y-2">
               {Object.values(locations).map(loc => (
-                <div key={loc.vehicleId} className="text-sm flex justify-between">
-                  <span>Bus {loc.vehicleId}</span>
+                <div key={loc.vehicleId} className="text-sm flex items-center justify-between gap-2">
+                  <button
+                    className={`font-medium ${
+                      selectedBusId === loc.vehicleId ? 'text-blue-700 underline' : 'text-gray-800'
+                    }`}
+                    onClick={() =>
+                      setSelectedBus(selectedBusId === loc.vehicleId ? null : loc.vehicleId)
+                    }
+                  >
+                    Bus {loc.vehicleId}
+                  </button>
                   <span className="font-mono text-blue-600">{loc.etaNextStop || 5} min</span>
                 </div>
               ))}
