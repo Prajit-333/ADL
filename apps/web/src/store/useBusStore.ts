@@ -16,9 +16,15 @@ export const useBusStore = create<BusState>((set) => ({
   activeBuses: [],
   selectedBusId: null,
   setLocations: (locations) => set({ locations }),
-  updateLocation: (update) =>
+  updateLocation: (update: BusLocationUpdate) =>
     set((state) => ({
-      locations: { ...state.locations, [update.vehicleId]: update }
+      locations: {
+        ...state.locations,
+        [update.vehicleId]: {
+          ...state.locations[update.vehicleId], // preserve previous fields like registration
+          ...update,
+        }
+      }
     })),
   setActiveBuses: (activeBuses) => set({ activeBuses }),
   setSelectedBus: (selectedBusId) => set({ selectedBusId }),

@@ -2,8 +2,8 @@ import type { Route, Stop, Bus, BusLocationUpdate } from '@repo/utils/types';
 
 export const mockData = {
   routes: [
-    { id: 'r1', code: '101', name: 'Downtown Express', city: 'City A', isActive: true, stops: [] },
-    { id: 'r2', code: '202', name: 'Airport Link', city: 'City A', isActive: true, stops: [] },
+    { id: 'r1', code: '101', startLocation: 'Downtown', destinationLocation: 'Central', city: 'City A', isActive: true, stops: [] },
+    { id: 'r2', code: '202', startLocation: 'Airport', destinationLocation: 'City Center', city: 'City A', isActive: true, stops: [] },
   ] as Route[],
   stops: [
     { id: 's1', name: 'Central Station', latitude: 12.9716, longitude: 77.5946 },

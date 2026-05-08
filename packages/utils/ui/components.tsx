@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from './utils';
+import type { ReactNode } from 'react';
 
 // Button Component
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -46,8 +47,15 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = 'Button';
 
 // Card Component
-export const Card = ({ className, children }: { className?: string; children: React.ReactNode }) => (
-  <div className={cn('bg-white rounded-lg border border-gray-200 shadow-sm p-4', className)}>
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  children: ReactNode;
+}
+
+export const Card = ({ className, children, ...props }: CardProps) => (
+  <div
+    className={cn('bg-white rounded-lg border border-gray-200 shadow-sm p-4', className)}
+    {...props}
+  >
     {children}
   </div>
 );
@@ -63,8 +71,8 @@ export const Modal = ({
   isOpen: boolean;
   onClose: () => void;
   title?: string;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
 }) => {
   if (!isOpen) return null;
   return (
@@ -89,7 +97,7 @@ export const Modal = ({
 };
 
 // Table Component
-export const Table = ({ headers, children, className }: { headers: string[]; children: React.ReactNode; className?: string }) => (
+export const Table = ({ headers, children, className }: { headers: string[]; children: ReactNode; className?: string }) => (
   <div className={cn('overflow-x-auto rounded-lg border border-gray-200', className)}>
     <table className="min-w-full divide-y divide-gray-200">
       <thead className="bg-gray-50">
@@ -109,7 +117,7 @@ export const Table = ({ headers, children, className }: { headers: string[]; chi
 );
 
 // Badge Component
-export const Badge = ({ variant = 'default', children }: { variant?: 'default' | 'success' | 'warning' | 'danger'; children: React.ReactNode }) => {
+export const Badge = ({ variant = 'default', children }: { variant?: 'default' | 'success' | 'warning' | 'danger'; children: ReactNode }) => {
   const styles = {
     default: 'bg-gray-100 text-gray-800',
     success: 'bg-green-100 text-green-800',
@@ -156,7 +164,7 @@ export const SearchInput = ({ value, onChange, placeholder }: { value: string; o
       className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
       placeholder={placeholder}
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => onChange(e.currentTarget.value)}
     />
   </div>
 );

@@ -77,4 +77,8 @@ export class WebSocketServer {
       console.error('Failed to consume Kafka telemetry', error);
     }
   }
+
+  getConnectionManager() {
+    return this.connectionManager;
+  }
 }

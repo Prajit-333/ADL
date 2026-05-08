@@ -22,8 +22,13 @@ export interface Bus {
 export interface Route {
   id: string;
   code: string;
-  name: string;
   city: string;
+  startLocation?: string;
+  destinationLocation?: string;
+  startLat?: number;
+  startLng?: number;
+  destLat?: number;
+  destLng?: number;
   isActive: boolean;
   stops: RouteStop[];
 }
@@ -73,6 +78,11 @@ export interface GPSReading {
 export interface BusLocationUpdate extends GPSReading {
   nextStopId?: string;
   etaNextStop?: number; // minutes
+  status?: 'STATIONARY' | 'ACTIVE' | 'WRONG_DIRECTION' | 'OFF_ROUTE' | 'DRIVER UNREACHABLE';
+  stopsCrossed?: number;
+  registration?: string;
+  routeId?: string;
+  timestamp?: number; // unix ms – set by the frontend WS hook
 }
 
 export interface ApiResponse<T> {

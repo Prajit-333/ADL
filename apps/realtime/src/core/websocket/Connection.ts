@@ -47,6 +47,7 @@ export class Connection {
   }
 
   send(data: any) {
-    this.socket.send(JSON.stringify(data));
+    const message = typeof data === 'string' ? data : JSON.stringify(data);
+    this.socket.send(message);
   }
 }

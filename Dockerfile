@@ -28,5 +28,5 @@ EXPOSE 8080
 # Web
 EXPOSE 5173
 
-# Start the entire project using Turbo
-CMD ["bun", "run", "dev"]
+# Start the entire backend project using Turbo, ignoring frontend to avoid vite issues
+CMD ["bun", "x", "turbo", "run", "dev", "--filter=!@apps/web"]

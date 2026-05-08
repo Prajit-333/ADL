@@ -1,0 +1,30 @@
+src/controllers/location.controller.ts(19,58): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/location.controller.ts(24,55): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/route-stop.controller.ts(22,54): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/route-stop.controller.ts(27,48): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/route-stop.controller.ts(32,35): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/route.controller.ts(25,51): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/route.controller.ts(30,50): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/route.controller.ts(35,36): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/trip.controller.ts(19,45): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/trip.controller.ts(30,49): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/vehicle-assignment.controller.ts(24,61): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/vehicle-assignment.controller.ts(29,60): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/vehicle-assignment.controller.ts(34,41): error TS2345: Argument of type 'string | string[] | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/repositories/driver-profile.repository.ts(5,29): error TS2724: '"/Users/sunilkumar/ADL/packages/db/generated/prisma/internal/prismaNamespace"' has no exported member named 'DriverProfileCreateUncheckedCreateInput'. Did you mean 'DriverProfileUncheckedCreateInput'?
+src/repositories/vehicle.repository.ts(5,29): error TS2724: '"/Users/sunilkumar/ADL/packages/db/generated/prisma/internal/prismaNamespace"' has no exported member named 'VehicleCreateUncheckedCreateInput'. Did you mean 'VehicleUncheckedCreateInput'?
+src/services/driver-profile.service.ts(15,36): error TS2724: '"/Users/sunilkumar/ADL/packages/db/generated/prisma/internal/prismaNamespace"' has no exported member named 'DriverProfileCreateUncheckedCreateInput'. Did you mean 'DriverProfileUncheckedCreateInput'?
+src/services/vehicle.service.ts(15,36): error TS2724: '"/Users/sunilkumar/ADL/packages/db/generated/prisma/internal/prismaNamespace"' has no exported member named 'VehicleCreateUncheckedCreateInput'. Did you mean 'VehicleUncheckedCreateInput'?

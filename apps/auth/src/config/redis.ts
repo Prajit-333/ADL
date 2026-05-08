@@ -4,9 +4,9 @@ import type { RedisClientType } from 'redis';
 export class RedisClient {
   private client: RedisClientType;
 
-  constructor(redisUrl: string) {
+  constructor() {
     this.client = createClient({
-      url: redisUrl,
+      url: process.env.REDIS_URL,
     });
 
     this.registerEvents();

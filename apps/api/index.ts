@@ -1,17 +1,32 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+<<<<<<< HEAD
 import { Kafka } from "kafkajs";
 import { PrismaService } from "db/client";
 
 dotenv.config({ override: true });
 const PORT = process.env.PORT || 3009;
+=======
+import v1Router from "./src/routes/index";
+import { errorHandler } from "./src/middlewares/error.middleware";
+import { ApiError } from "./src/utils/ApiError";
+import { connectKafka } from "./src/config/kafka";
+
+dotenv.config();
+connectKafka();
+
+>>>>>>> c8830d5974eb3a3a2251c74c5429b40835c640aa
 const app = express();
+const PORT = process.env.PORT || 3009;
+
+// Middleware
 app.use(express.json());
 app.use(cors());
 const prismaService = new PrismaService();
 const prisma = prismaService.getClient();
 
+<<<<<<< HEAD
 const KAFKA_TOPIC = process.env.KAFKA_TOPIC || "bus.location.updated";
 const KAFKA_CLIENT_ID = process.env.KAFKA_CLIENT_ID || "adl-api";
 const KAFKA_BROKERS = (process.env.KAFKA_BROKERS || "localhost:9092")
@@ -412,7 +427,26 @@ app.post("/telemetry", async (req, res) => {
     });
   }
 });
+=======
+// Health Check
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "UP", module: "ADL-API" });
+});
+
+// API Routes
+app.use("/api/v1", v1Router);
+
+// 404 Handler
+app.use((req, res, next) => {
+  next(new ApiError(404, "Not found"));
+});
+
+// Global Error Handler
+app.use(errorHandler);
+>>>>>>> c8830d5974eb3a3a2251c74c5429b40835c640aa
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`🚀 Production Server running on port ${PORT}`);
+  console.log(`📍 Health Check: http://localhost:${PORT}/health`);
+  console.log(`📍 API Base: http://localhost:${PORT}/api/v1`);
 });

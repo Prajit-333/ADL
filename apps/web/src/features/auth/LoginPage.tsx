@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Alert, Button, Card } from '@repo/utils/ui';
 import { useAuthStore, type AuthUser } from '../../store/useAuthStore';
+import { api } from '../../services/api';
 
 type LoginRole = 'PASSENGER' | 'DRIVER' | 'ADMIN' | 'TRANSIT_ADMIN';
 
@@ -81,7 +82,7 @@ export default function LoginPage() {
     [selectedRole],
   );
 
-  const handleLogin = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (selectedRole === 'PASSENGER') {
@@ -95,23 +96,58 @@ export default function LoginPage() {
       return;
     }
 
-    const username = credentials.username.trim().toLowerCase();
+    const username = credentials.username.trim();
     const password = credentials.password;
 
-    if (username === selectedRoleConfig.username && password === selectedRoleConfig.password) {
-      const userData: AuthUser = {
-        id: roleId[selectedRole],
-        name: roleName[selectedRole],
-        role: selectedRole,
-      };
-      login(userData);
-      setCredentials({ username: '', password: '' });
-      setError('');
-      navigate(rolePath[selectedRole]);
+    // Restore hardcoded logic for Admin and Transit Admin
+    if (selectedRole === 'ADMIN' || selectedRole === 'TRANSIT_ADMIN') {
+      if (username === selectedRoleConfig.username && password === selectedRoleConfig.password) {
+        const userData: AuthUser = {
+          id: roleId[selectedRole],
+          name: roleName[selectedRole],
+          role: selectedRole,
+        };
+        login(userData);
+        setCredentials({ username: '', password: '' });
+        setError('');
+        navigate(rolePath[selectedRole]);
+        return;
+      }
+      setError(`Invalid credentials for ${selectedRoleConfig.label}.`);
       return;
     }
 
-    setError(`Invalid credentials for ${selectedRoleConfig.label}.`);
+    // Real API login for Driver
+    if (selectedRole === 'DRIVER') {
+      try {
+        const res = await api.login({ username, password });
+        
+        if (res.success && res.data?.user) {
+          const backendUser = res.data.user;
+          
+          if (backendUser.role !== selectedRole) {
+            setError(`Invalid portal. This user is a ${backendUser.role}, not a ${selectedRole}.`);
+            return;
+          }
+
+          const userData: AuthUser = {
+            id: backendUser.id,
+            name: backendUser.name,
+            role: backendUser.role,
+          };
+          
+          login(userData);
+          setCredentials({ username: '', password: '' });
+          setError('');
+          navigate(rolePath[selectedRole]);
+        } else {
+          setError(`Invalid credentials for ${selectedRoleConfig.label}.`);
+        }
+      } catch (err: any) {
+        const msg = err.response?.data?.message || err.message || 'Login failed.';
+        setError(msg);
+      }
+    }
   };
 
   return (
