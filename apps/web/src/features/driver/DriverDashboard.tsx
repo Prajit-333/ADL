@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '../../store/useAuthStore';
-<<<<<<< HEAD
-import { useGeolocation } from '../../hooks/useGeolocation';
-import { api } from '../../services/api';
-=======
 import { useTripTracker } from '../../hooks/useTripTracker';
->>>>>>> c8830d5974eb3a3a2251c74c5429b40835c640aa
 import { Button, Card, Badge, Alert } from '@repo/utils/ui';
 import { Car, MapPin, Route, Shield, CheckCircle, Circle, AlertTriangle, Navigation, Ban } from 'lucide-react';
 import { api } from '../../services/api';
@@ -57,28 +52,6 @@ export default function DriverDashboard() {
     return position.coords.speed * 3.6;
   }, [position]);
 
-<<<<<<< HEAD
-  useEffect(() => {
-    if (!isTripActive || !position || !user || user.role !== 'DRIVER') return;
-
-    const payload = {
-      vehicleId: user.id,
-      routeId: 'route-101',
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      speed: speedKmh,
-    };
-
-    void api.updateLocation(payload).catch((error) => {
-      console.error('Failed to send telemetry', error);
-    });
-  }, [isTripActive, position, speedKmh, user]);
-
-  const handleStartTrip = () => {
-    if (!user || user.role !== 'DRIVER') return;
-    setTripStartTime(new Date());
-    setIsTripActive(true);
-=======
   // GPS accuracy in metres — low value = real GPS, high value = IP/Wi-Fi based
   const gpsAccuracy = position?.coords.accuracy ?? null;
   const gpsQuality = gpsAccuracy === null
@@ -109,7 +82,6 @@ export default function DriverDashboard() {
     } catch (err) {
       console.error('Failed to start trip', err);
     }
->>>>>>> c8830d5974eb3a3a2251c74c5429b40835c640aa
   };
 
   const handleEndTrip = async () => {

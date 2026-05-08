@@ -3,21 +3,13 @@ import MapView from './MapView';
 import { useRouteStore } from '../../store/useRouteStore';
 import { useBusStore } from '../../store/useBusStore';
 import { api } from '../../services/api';
-<<<<<<< HEAD
-import { mockData } from '../../services/mock';
-=======
->>>>>>> c8830d5974eb3a3a2251c74c5429b40835c640aa
 import { realtime } from '../../services/realtime';
 import { SearchInput, Card, Badge, Spinner } from '@repo/utils/ui';
 
 export default function PassengerDashboard() {
   const { routes, setRoutes, selectedRouteId, setSelectedRoute, isLoading, setLoading } = useRouteStore();
-<<<<<<< HEAD
-  const { locations, selectedBusId, setSelectedBus } = useBusStore();
-=======
   const { locations, updateLocation } = useBusStore();
   const [search, setSearch] = useState('');
->>>>>>> c8830d5974eb3a3a2251c74c5429b40835c640aa
 
   useEffect(() => {
     const fetchRoutes = async () => {
@@ -64,19 +56,6 @@ export default function PassengerDashboard() {
     };
   }, []);
 
-<<<<<<< HEAD
-  useEffect(() => {
-    if (!selectedRouteId) return;
-    realtime.subscribeToRoute(selectedRouteId);
-    return () => realtime.unsubscribeFromRoute(selectedRouteId);
-  }, [selectedRouteId]);
-
-  useEffect(() => {
-    if (!selectedBusId) return;
-    realtime.subscribeToBus(selectedBusId);
-    return () => realtime.unsubscribeFromBus(selectedBusId);
-  }, [selectedBusId]);
-=======
   // Subscribe to selected route
   useEffect(() => {
     if (selectedRouteId) realtime.subscribeToRoute(selectedRouteId);
@@ -118,7 +97,6 @@ export default function PassengerDashboard() {
   });
 
   const activeBusCount = Object.keys(locations).length;
->>>>>>> c8830d5974eb3a3a2251c74c5429b40835c640aa
 
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -143,19 +121,6 @@ export default function PassengerDashboard() {
           ) : filteredRoutes.length === 0 ? (
             <div className="text-center p-8 text-gray-400 text-sm">No routes found.</div>
           ) : (
-<<<<<<< HEAD
-            routes.map(route => (
-              <button key={route.id} onClick={() => setSelectedRoute(route.id)} className="text-left">
-                <Card
-                  className={`cursor-pointer transition-all hover:border-blue-400 ${selectedRouteId === route.id ? 'border-blue-600 ring-1 ring-blue-600' : ''}`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-sm font-bold text-blue-600">{route.code}</span>
-                      <h3 className="font-semibold text-gray-900">{route.name}</h3>
-                    </div>
-                    <Badge variant="success">Active</Badge>
-=======
             filteredRoutes.map(route => (
               <Card
                 key={route.id}
@@ -167,10 +132,10 @@ export default function PassengerDashboard() {
                     <span className="text-sm font-bold text-blue-600">{route.code}</span>
                     <h3 className="font-semibold text-gray-900 text-sm">{route.startLocation} → {route.destinationLocation}</h3>
                     <p className="text-xs text-gray-400 mt-0.5">{route.stops?.length ?? 0} stops · {route.city}</p>
->>>>>>> c8830d5974eb3a3a2251c74c5429b40835c640aa
                   </div>
-                </Card>
-              </button>
+                  <Badge variant="success">Active</Badge>
+                </div>
+              </Card>
             ))
           )}
         </div>
@@ -180,23 +145,6 @@ export default function PassengerDashboard() {
           <div className="mt-2 p-4 bg-blue-50 rounded-lg border border-blue-100">
             <h4 className="font-bold text-blue-800 mb-2 text-sm">Buses on this route</h4>
             <div className="space-y-2">
-<<<<<<< HEAD
-              {Object.values(locations).map(loc => (
-                <div key={loc.vehicleId} className="text-sm flex items-center justify-between gap-2">
-                  <button
-                    className={`font-medium ${
-                      selectedBusId === loc.vehicleId ? 'text-blue-700 underline' : 'text-gray-800'
-                    }`}
-                    onClick={() =>
-                      setSelectedBus(selectedBusId === loc.vehicleId ? null : loc.vehicleId)
-                    }
-                  >
-                    Bus {loc.vehicleId}
-                  </button>
-                  <span className="font-mono text-blue-600">{loc.etaNextStop || 5} min</span>
-                </div>
-              ))}
-=======
               {Object.values(locations).filter(loc => loc.routeId === selectedRouteId).length === 0 ? (
                 <p className="text-xs text-blue-400">No active buses right now.</p>
               ) : (
@@ -220,7 +168,6 @@ export default function PassengerDashboard() {
                   );
                 })
               )}
->>>>>>> c8830d5974eb3a3a2251c74c5429b40835c640aa
             </div>
           </div>
         )}

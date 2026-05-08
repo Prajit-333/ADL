@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type { ApiResponse, Route, Stop, Bus } from '@repo/utils/types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3009';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -11,74 +11,6 @@ const client = axios.create({
 });
 
 export const api = {
-<<<<<<< HEAD
-  getRoutes: () => client.get<ApiResponse<Route[]>>('/routes').then((r) => r.data),
-  getStops: () => client.get<ApiResponse<Stop[]>>('/stops').then((r) => r.data),
-  getActiveBuses: () => client.get<ApiResponse<Bus[]>>('/buses/active').then((r) => r.data),
-  getDrivers: () => client.get<ApiResponse<Driver[]>>('/drivers').then((r) => r.data),
-  getAssignments: () =>
-    client
-      .get<
-        ApiResponse<
-          Array<{
-            id: string;
-            vehicleId: string;
-            routeId: string;
-            driverId: string;
-            startDate: string;
-            endDate?: string;
-            vehicleRegistration: string;
-            routeCode: string;
-            driverName: string;
-          }>
-        >
-      >('/assignments')
-      .then((r) => r.data),
-  getDriverProfile: (id: string) =>
-    client.get<ApiResponse<Driver>>(`/drivers/${id}`).then((r) => r.data),
-  createRoute: (data: { code: string; name: string; city: string }) =>
-    client.post<ApiResponse<Route>>('/admin/routes', data).then((r) => r.data),
-  createStop: (data: {
-    routeId: string;
-    name: string;
-    latitude: number;
-    longitude: number;
-    sequence?: number;
-  }) => client.post<ApiResponse<Stop>>('/admin/stops', data).then((r) => r.data),
-  createVehicle: (data: {
-    registration: string;
-    type: string;
-    capacity?: number;
-    status?: string;
-  }) => client.post<ApiResponse<Bus>>('/admin/vehicles', data).then((r) => r.data),
-  createAssignment: (data: {
-    vehicleId: string;
-    routeId: string;
-    driverId: string;
-    startDate?: string;
-    endDate?: string;
-  }) =>
-    client
-      .post<
-        ApiResponse<{
-          id: string;
-          vehicleId: string;
-          routeId: string;
-          driverId: string;
-          startDate: string;
-          endDate?: string;
-        }>
-      >('/admin/assignments', data)
-      .then((r) => r.data),
-  updateLocation: (data: {
-    vehicleId: string;
-    routeId?: string;
-    tripId?: string;
-    latitude: number;
-    longitude: number;
-    speed?: number;
-  }) => client.post('/telemetry', data).then((r) => r.data),
-=======
   // ── Auth ───────────────────────────────────────────────────────────────────
   login: (data: any) => client.post<ApiResponse<any>>('/auth/login', data).then(r => r.data),
 
@@ -121,5 +53,4 @@ export const api = {
     client.post<ApiResponse<any>>('/trips/start', data).then(r => r.data),
   endTrip: (id: string) =>
     client.patch<ApiResponse<any>>(`/trips/${id}/end`, {}).then(r => r.data),
->>>>>>> c8830d5974eb3a3a2251c74c5429b40835c640aa
 };

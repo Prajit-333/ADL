@@ -185,7 +185,7 @@ function BusStatusPanel({ bus, selectedRouteId }: {
 }
 
 export default function MapView() {
-  const { locations, selectedBusId } = useBusStore();
+  const { locations } = useBusStore();
   const { routes, selectedRouteId } = useRouteStore();
 
   // User's own GPS position
@@ -243,27 +243,7 @@ export default function MapView() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-<<<<<<< HEAD
-  const nearbyBusLocations = useMemo(() => {
-    let allLocations = Object.values(locations);
-    if (selectedBusId) {
-      allLocations = allLocations.filter((loc) => loc.vehicleId === selectedBusId);
-    }
-    if (!userPosition) return allLocations;
-
-    return allLocations.filter((loc) => {
-      const distanceKm = getDistanceKm(
-        userPosition[0],
-        userPosition[1],
-        loc.latitude,
-        loc.longitude
-      );
-      return distanceKm <= NEARBY_RADIUS_KM;
-    });
-  }, [locations, selectedBusId, userPosition]);
-=======
   const initialCenter: [number, number] = flyTarget ?? DEFAULT_CENTER;
->>>>>>> c8830d5974eb3a3a2251c74c5429b40835c640aa
 
   return (
     <div className="relative h-full w-full">

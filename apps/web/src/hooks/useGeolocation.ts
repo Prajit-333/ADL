@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { api } from '../services/api';
 
 export function useGeolocation(enabled: boolean, vehicleId?: string) {
   const [position, setPosition] = useState<GeolocationPosition | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-<<<<<<< HEAD
-=======
   const sendUpdate = useCallback(async (pos: GeolocationPosition) => {
     if (!vehicleId) return;
     try {
@@ -20,20 +19,20 @@ export function useGeolocation(enabled: boolean, vehicleId?: string) {
     }
   }, [vehicleId]);
 
->>>>>>> c8830d5974eb3a3a2251c74c5429b40835c640aa
   useEffect(() => {
     if (!enabled || !navigator.geolocation) return;
 
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         setPosition(pos);
+        sendUpdate(pos);
       },
       (err) => setError(err.message),
       { enableHighAccuracy: true, maximumAge: 10000 }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [enabled]);
+  }, [enabled, sendUpdate]);
 
   return { position, error };
 }
